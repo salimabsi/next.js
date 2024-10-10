@@ -170,7 +170,6 @@ import { RouteKind } from './route-kind'
 import type { RouteModule } from './route-modules/route-module'
 import { FallbackMode, parseFallbackField } from '../lib/fallback'
 import { toResponseCacheEntry } from './response-cache/utils'
-import { scheduleOnNextTick } from '../lib/scheduler'
 import { PrefetchCacheScopes } from './lib/prefetch-cache-scopes'
 import { runWithCacheScope } from './async-storage/cache-scope.external'
 
@@ -3164,42 +3163,6 @@ export default abstract class Server<
         throw new Error('invariant: cache entry required but not generated')
       }
       return null
-    }
-
-    // If we're not in minimal mode and the cache entry that was returned was a
-    // app page fallback, then we need to kick off the dynamic shell generation.
-    if (
-      ssgCacheKey &&
-      !this.minimalMode &&
-      isRoutePPREnabled &&
-      this.nextConfig.experimental.pprFallbacks &&
-      cacheEntry.value?.kind === CachedRouteKind.APP_PAGE &&
-      cacheEntry.isFallback &&
-      !isOnDemandRevalidate
-    ) {
-      scheduleOnNextTick(async () => {
-        try {
-          await this.responseCache.get(
-            ssgCacheKey,
-            () =>
-              doRender({
-                // We're an on-demand request, so we don't need to pass in the
-                // fallbackRouteParams.
-                fallbackRouteParams: null,
-                postponed: undefined,
-              }),
-            {
-              routeKind: RouteKind.APP_PAGE,
-              incrementalCache,
-              isOnDemandRevalidate: true,
-              isPrefetch: false,
-              isRoutePPREnabled: true,
-            }
-          )
-        } catch (err) {
-          console.error('Error occurred while rendering dynamic shell', err)
-        }
-      })
     }
 
     const didPostpone =
