@@ -119,6 +119,11 @@ export default class ResponseCache implements ResponseCacheBase {
               // to update it yet.
               return null
             }
+
+            // Wait for at least one task to ensure that the caller for the
+            // resolve can get it's value and send it to the client before we go
+            // ahead and re-render to start the new revalidation.
+            await new Promise<void>(scheduleOnNextTick)
           }
 
           const cacheEntry = await responseGenerator({

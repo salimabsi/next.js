@@ -170,6 +170,7 @@ import { RouteKind } from './route-kind'
 import type { RouteModule } from './route-modules/route-module'
 import { FallbackMode, parseFallbackField } from '../lib/fallback'
 import { toResponseCacheEntry } from './response-cache/utils'
+import { scheduleOnNextTick } from '../lib/scheduler'
 import { PrefetchCacheScopes } from './lib/prefetch-cache-scopes'
 import { runWithCacheScope } from './async-storage/cache-scope.external'
 
@@ -2085,10 +2086,16 @@ export default abstract class Server<
       routeModule = components.routeModule
     }
 
-    /**
-     * If the route being rendered is an app page, and the ppr feature has been
-     * enabled, then the given route _could_ support PPR.
-     */
+    // Get the route out of the prerender manifest, either the static route
+    // or the dynamic source route. We'll use it to pull data for PPR and for
+    // determining if we should render a route shell.
+    const prerenderStaticRoute = prerenderManifest.routes[resolvedUrlPathname]
+    const prerenderDynamicRoute =
+      prerenderManifest.dynamicRoutes[toRoute(pathname)]
+    const prerenderRoute = prerenderStaticRoute ?? prerenderDynamicRoute
+
+    // If the route being rendered is an app page, and the ppr feature has been
+    // enabled, then the given route _could_ support PPR.
     const couldSupportPPR: boolean =
       this.isAppPPREnabled &&
       typeof routeModule !== 'undefined' &&
@@ -2110,10 +2117,7 @@ export default abstract class Server<
     // prerender manifest and this is an app page.
     const isRoutePPREnabled: boolean =
       couldSupportPPR &&
-      ((
-        prerenderManifest.routes[pathname] ??
-        prerenderManifest.dynamicRoutes[pathname]
-      )?.renderingMode === 'PARTIALLY_STATIC' ||
+      (prerenderRoute?.renderingMode === 'PARTIALLY_STATIC' ||
         // Ideally we'd want to check the appConfig to see if this page has PPR
         // enabled or not, but that would require plumbing the appConfig through
         // to the server during development. We assume that the page supports it
@@ -3163,6 +3167,45 @@ export default abstract class Server<
         throw new Error('invariant: cache entry required but not generated')
       }
       return null
+    }
+
+    // If we're not in minimal mode and the cache entry that was returned was a
+    // app page fallback, then we need to kick off the dynamic shell generation.
+    // We'll only do this if the route was prerendered already (this route exists
+    // in the prerender manifest).
+    if (
+      ssgCacheKey &&
+      !this.minimalMode &&
+      isRoutePPREnabled &&
+      prerenderStaticRoute &&
+      this.nextConfig.experimental.pprFallbacks &&
+      cacheEntry.value?.kind === CachedRouteKind.APP_PAGE &&
+      cacheEntry.isFallback &&
+      !isOnDemandRevalidate
+    ) {
+      scheduleOnNextTick(async () => {
+        try {
+          await this.responseCache.get(
+            ssgCacheKey,
+            () =>
+              doRender({
+                // We're an on-demand request, so we don't need to pass in the
+                // fallbackRouteParams.
+                fallbackRouteParams: null,
+                postponed: undefined,
+              }),
+            {
+              routeKind: RouteKind.APP_PAGE,
+              incrementalCache,
+              isOnDemandRevalidate: true,
+              isPrefetch: false,
+              isRoutePPREnabled: true,
+            }
+          )
+        } catch (err) {
+          console.error('Error occurred while rendering dynamic shell', err)
+        }
+      })
     }
 
     const didPostpone =
