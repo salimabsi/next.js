@@ -2,7 +2,7 @@ use std::iter::once;
 
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
-use turbo_tasks::{RcStr, Value, Vc};
+use turbo_tasks::{RcStr, ResolvedVc, Value, Vc};
 use turbo_tasks_env::{EnvMap, ProcessEnv};
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack::{
@@ -181,7 +181,7 @@ pub async fn get_server_resolve_options_context(
     let server_external_packages_plugin = ExternalCjsModulesResolvePlugin::new(
         project_path,
         project_path.root(),
-        ExternalPredicate::Only(Vc::cell(external_packages)).cell(),
+        ExternalPredicate::Only(ResolvedVc::cell(external_packages)).cell(),
         *next_config.import_externals().await?,
     );
 
@@ -204,7 +204,7 @@ pub async fn get_server_resolve_options_context(
         ExternalCjsModulesResolvePlugin::new(
             project_path,
             project_path.root(),
-            ExternalPredicate::AllExcept(Vc::cell(transpiled_packages)).cell(),
+            ExternalPredicate::AllExcept(ResolvedVc::cell(transpiled_packages)).cell(),
             *next_config.import_externals().await?,
         )
     };
@@ -377,7 +377,7 @@ fn internal_assets_conditions() -> ContextCondition {
 #[turbo_tasks::function]
 pub async fn get_server_module_options_context(
     project_path: Vc<FileSystemPath>,
-    execution_context: Vc<ExecutionContext>,
+    execution_context: ResolvedVc<ExecutionContext>,
     ty: Value<ServerContextType>,
     mode: Vc<NextMode>,
     next_config: Vc<NextConfig>,
@@ -572,7 +572,7 @@ pub async fn get_server_module_options_context(
                 ecmascript: EcmascriptOptionsContext {
                     enable_jsx: Some(jsx_runtime_options),
                     enable_typescript_transform: Some(tsconfig),
-                    enable_decorators: Some(decorators_options),
+                    enable_decorators: Some(decorators_options.to_resolved().await?),
                     ..module_options_context.ecmascript
                 },
                 enable_webpack_loaders,
@@ -635,7 +635,7 @@ pub async fn get_server_module_options_context(
                 ecmascript: EcmascriptOptionsContext {
                     enable_jsx: Some(jsx_runtime_options),
                     enable_typescript_transform: Some(tsconfig),
-                    enable_decorators: Some(decorators_options),
+                    enable_decorators: Some(decorators_options.to_resolved().await?),
                     ..module_options_context.ecmascript
                 },
                 enable_webpack_loaders,
@@ -709,7 +709,7 @@ pub async fn get_server_module_options_context(
                 ecmascript: EcmascriptOptionsContext {
                     enable_jsx: Some(rsc_jsx_runtime_options),
                     enable_typescript_transform: Some(tsconfig),
-                    enable_decorators: Some(decorators_options),
+                    enable_decorators: Some(decorators_options.to_resolved().await?),
                     ..module_options_context.ecmascript
                 },
                 enable_webpack_loaders,
@@ -782,7 +782,7 @@ pub async fn get_server_module_options_context(
                 ecmascript: EcmascriptOptionsContext {
                     enable_jsx: Some(rsc_jsx_runtime_options),
                     enable_typescript_transform: Some(tsconfig),
-                    enable_decorators: Some(decorators_options),
+                    enable_decorators: Some(decorators_options.to_resolved().await?),
                     ..module_options_context.ecmascript
                 },
                 enable_webpack_loaders,
@@ -872,7 +872,7 @@ pub async fn get_server_module_options_context(
                 ecmascript: EcmascriptOptionsContext {
                     enable_jsx: Some(jsx_runtime_options),
                     enable_typescript_transform: Some(tsconfig),
-                    enable_decorators: Some(decorators_options),
+                    enable_decorators: Some(decorators_options.to_resolved().await?),
                     ..module_options_context.ecmascript
                 },
                 enable_webpack_loaders,

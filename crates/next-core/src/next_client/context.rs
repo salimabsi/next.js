@@ -2,7 +2,7 @@ use std::iter::once;
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::{RcStr, Value, Vc};
+use turbo_tasks::{RcStr, ResolvedVc, Value, Vc};
 use turbo_tasks_env::EnvMap;
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack::{
@@ -195,8 +195,8 @@ fn internal_assets_conditions() -> ContextCondition {
 #[turbo_tasks::function]
 pub async fn get_client_module_options_context(
     project_path: Vc<FileSystemPath>,
-    execution_context: Vc<ExecutionContext>,
-    env: Vc<Environment>,
+    execution_context: ResolvedVc<ExecutionContext>,
+    env: ResolvedVc<Environment>,
     ty: Value<ClientContextType>,
     mode: Vc<NextMode>,
     next_config: Vc<NextConfig>,
@@ -204,7 +204,7 @@ pub async fn get_client_module_options_context(
     let next_mode = mode.await?;
 
     let resolve_options_context =
-        get_client_resolve_options_context(project_path, ty, mode, next_config, execution_context);
+        get_client_resolve_options_context(project_path, ty, mode, next_config, *execution_context);
 
     let tsconfig = get_typescript_transform_options(project_path);
     let decorators_options = get_decorators_transform_options(project_path);
@@ -315,7 +315,7 @@ pub async fn get_client_module_options_context(
         ecmascript: EcmascriptOptionsContext {
             enable_jsx: Some(jsx_runtime_options),
             enable_typescript_transform: Some(tsconfig),
-            enable_decorators: Some(decorators_options),
+            enable_decorators: Some(decorators_options.to_resolved().await?),
             ..module_options_context.ecmascript.clone()
         },
         enable_webpack_loaders,
@@ -410,8 +410,10 @@ pub async fn get_client_runtime_entries(
         // because the bootstrap contains JSX which requires Refresh's global
         // functions to be available.
         if let Some(request) = enable_react_refresh {
-            runtime_entries
-                .push(RuntimeEntry::Request(request, project_root.join("_".into())).cell())
+            runtime_entries.push(
+                RuntimeEntry::Request(request.to_resolved().await?, project_root.join("_".into()))
+                    .cell(),
+            )
         };
     }
 
@@ -420,7 +422,9 @@ pub async fn get_client_runtime_entries(
             RuntimeEntry::Request(
                 Request::parse(Value::new(Pattern::Constant(
                     "next/dist/client/app-next-turbopack.js".into(),
-                ))),
+                )))
+                .to_resolved()
+                .await?,
                 project_root.join("_".into()),
             )
             .cell(),

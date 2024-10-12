@@ -2,8 +2,8 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    debug::ValueDebugFormat, trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, ValueToString,
-    Vc,
+    debug::ValueDebugFormat, trace::TraceRawVcs, ResolvedVc, TryFlatJoinIterExt, TryJoinIterExt,
+    ValueToString, Vc,
 };
 use turbo_tasks_hash::Xxh3Hash64Hasher;
 
@@ -25,7 +25,7 @@ pub struct AvailableChunkItemInfoMap(IndexMap<Vc<Box<dyn ChunkItem>>, AvailableC
 /// `include` queries.
 #[turbo_tasks::value]
 pub struct AvailableChunkItems {
-    parent: Option<Vc<AvailableChunkItems>>,
+    parent: Option<ResolvedVc<AvailableChunkItems>>,
     chunk_items: Vc<AvailableChunkItemInfoMap>,
 }
 
@@ -58,7 +58,7 @@ impl AvailableChunkItems {
             .try_flat_join()
             .await?;
         Ok(AvailableChunkItems {
-            parent: Some(self),
+            parent: Some(self.to_resolved().await?),
             chunk_items: Vc::cell(chunk_items.into_iter().collect()),
         }
         .cell())

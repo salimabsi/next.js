@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use indexmap::{indexset, IndexMap, IndexSet};
-use turbo_tasks::{Completion, RcStr, State, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{Completion, RcStr, ResolvedVc, State, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
@@ -336,7 +336,10 @@ impl Introspectable for AssetGraphContentSource {
         Ok(Vc::cell(
             root_asset_children
                 .chain(expanded_asset_children)
-                .chain(once((expanded_key, Vc::upcast(FullyExpaned(self).cell()))))
+                .chain(once((
+                    expanded_key,
+                    Vc::upcast(FullyExpaned(self.to_resolved().await?).cell()),
+                )))
                 .collect(),
         ))
     }
@@ -348,7 +351,7 @@ fn fully_expaned_introspectable_type() -> Vc<RcStr> {
 }
 
 #[turbo_tasks::value]
-struct FullyExpaned(Vc<AssetGraphContentSource>);
+struct FullyExpaned(ResolvedVc<AssetGraphContentSource>);
 
 #[turbo_tasks::value_impl]
 impl Introspectable for FullyExpaned {

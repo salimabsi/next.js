@@ -241,7 +241,7 @@ enum ChunkContentGraphNode {
         module: Vc<Box<dyn ChunkableModule>>,
     },
     // ModuleReferences that are not placed in the current chunk group
-    ExternalModuleReference(Vc<Box<dyn ModuleReference>>),
+    ExternalModuleReference(ResolvedVc<Box<dyn ModuleReference>>),
     /// A list of directly referenced chunk items from which `is_async_module`
     /// will be inherited.
     InheritAsyncInfo {
@@ -258,7 +258,7 @@ enum ChunkGraphNodeToReferences {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, TraceRawVcs)]
 struct ChunkGraphEdge {
-    key: Option<Vc<Box<dyn Module>>>,
+    key: Option<ResolvedVc<Box<dyn Module>>>,
     node: ChunkContentGraphNode,
 }
 
@@ -347,14 +347,18 @@ async fn graph_node_to_referenced_nodes(
             else {
                 return Ok(vec![ChunkGraphEdge {
                     key: None,
-                    node: ChunkContentGraphNode::ExternalModuleReference(reference),
+                    node: ChunkContentGraphNode::ExternalModuleReference(
+                        reference.to_resolved().await?,
+                    ),
                 }]);
             };
 
             let Some(chunking_type) = *chunkable_module_reference.chunking_type().await? else {
                 return Ok(vec![ChunkGraphEdge {
                     key: None,
-                    node: ChunkContentGraphNode::ExternalModuleReference(reference),
+                    node: ChunkContentGraphNode::ExternalModuleReference(
+                        reference.to_resolved().await?,
+                    ),
                 }]);
             };
 
@@ -372,7 +376,9 @@ async fn graph_node_to_referenced_nodes(
                         return Ok((
                             Some(ChunkGraphEdge {
                                 key: None,
-                                node: ChunkContentGraphNode::ExternalModuleReference(reference),
+                                node: ChunkContentGraphNode::ExternalModuleReference(
+                                    reference.to_resolved().await?,
+                                ),
                             }),
                             None,
                         ));
@@ -386,7 +392,7 @@ async fn graph_node_to_referenced_nodes(
                                 .await?;
                             Ok((
                                 Some(ChunkGraphEdge {
-                                    key: Some(module),
+                                    key: Some(module.to_resolved().await?),
                                     node: ChunkContentGraphNode::ChunkItem {
                                         item: chunk_item,
                                         ident: module.ident().to_string().await?,
@@ -402,7 +408,7 @@ async fn graph_node_to_referenced_nodes(
                                 .await?;
                             Ok((
                                 Some(ChunkGraphEdge {
-                                    key: Some(module),
+                                    key: Some(module.to_resolved().await?),
                                     node: ChunkContentGraphNode::ChunkItem {
                                         item: chunk_item,
                                         ident: module.ident().to_string().await?,
@@ -437,7 +443,7 @@ async fn graph_node_to_referenced_nodes(
                                     .await?;
                                 Ok((
                                     Some(ChunkGraphEdge {
-                                        key: Some(module),
+                                        key: Some(module.to_resolved().await?),
                                         node: ChunkContentGraphNode::ChunkItem {
                                             item: chunk_item,
                                             ident: module.ident().to_string().await?,
@@ -519,7 +525,7 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
             }
         };
 
-        if !self.processed_modules.insert(module) {
+        if !self.processed_modules.insert(*module) {
             return VisitControlFlow::Skip(node);
         }
 
@@ -583,7 +589,7 @@ async fn chunk_content_internal_parallel(
                 return Ok(None);
             };
             Ok(Some(ChunkGraphEdge {
-                key: Some(entry),
+                key: Some(entry.to_resolved().await?),
                 node: ChunkContentGraphNode::ChunkItem {
                     item: chunkable_module
                         .as_chunk_item(chunking_context)
@@ -629,7 +635,7 @@ async fn chunk_content_internal_parallel(
             }
             ChunkContentGraphNode::ExternalModuleReference(reference) => {
                 let reference = reference.resolve().await?;
-                external_module_references.insert(reference);
+                external_module_references.insert(*reference);
             }
             ChunkContentGraphNode::InheritAsyncInfo { item, references } => {
                 for &(reference, ty) in &references {
