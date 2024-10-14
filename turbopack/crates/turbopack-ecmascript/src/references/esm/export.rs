@@ -15,7 +15,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{trace::TraceRawVcs, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, vdbg, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::glob::Glob;
 use turbopack_core::{
     chunk::ChunkingContext,
@@ -23,6 +23,7 @@ use turbopack_core::{
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, StyledString},
     module::Module,
     reference::ModuleReference,
+    resolve::ModulePart,
 };
 
 use super::base::ReferencedAsset;
@@ -30,6 +31,7 @@ use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGeneration, CodeGenerationHoistedStmt},
     magic_identifier,
+    tree_shake::asset::EcmascriptModulePartAsset,
 };
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -126,10 +128,12 @@ pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: RcStr,
     side_effect_free_packages: Vc<Glob>,
+    ignore_side_effect_of_entry: Vc<bool>,
 ) -> Result<Vc<FollowExportsResult>> {
-    if !*module
-        .is_marked_as_side_effect_free(side_effect_free_packages)
-        .await?
+    if !*ignore_side_effect_of_entry.await?
+        && !*module
+            .is_marked_as_side_effect_free(side_effect_free_packages)
+            .await?
     {
         return Ok(FollowExportsResult::cell(FollowExportsResult {
             module,
@@ -140,6 +144,7 @@ pub async fn follow_reexports(
     let mut module = module;
     let mut export_name = export_name;
     loop {
+        vdbg!(&*module.ident().to_string().await?);
         let exports = module.get_exports().await?;
         let EcmascriptExports::EsmExports(exports) = &*exports else {
             return Ok(FollowExportsResult::cell(FollowExportsResult {
@@ -152,13 +157,20 @@ pub async fn follow_reexports(
         // Try to find the export in the local exports
         let exports_ref = exports.await?;
         if let Some(export) = exports_ref.exports.get(&export_name) {
-            match handle_declared_export(module, export_name, export, side_effect_free_packages)
-                .await?
+            match handle_declared_export(
+                module,
+                export_name.clone(),
+                export,
+                side_effect_free_packages,
+            )
+            .await?
             {
                 ControlFlow::Continue((m, n)) => {
-                    module = m;
-                    export_name = n;
-                    continue;
+                    if !is_module_part_with_no_real_export(m).await? {
+                        module = m;
+                        export_name = n;
+                        continue;
+                    }
                 }
                 ControlFlow::Break(result) => {
                     return Ok(result.cell());
@@ -171,6 +183,7 @@ pub async fn follow_reexports(
             let result = get_all_export_names(module).await?;
             if let Some(m) = result.esm_exports.get(&export_name) {
                 module = *m;
+                vdbg!("all_export_names", &*module.ident().to_string().await?);
                 continue;
             }
             return match &result.dynamic_exporting_modules[..] {
@@ -201,6 +214,21 @@ pub async fn follow_reexports(
             ty: FoundExportType::NotFound,
         }));
     }
+}
+
+async fn is_module_part_with_no_real_export(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+) -> Result<bool> {
+    if let Some(module) = Vc::try_resolve_downcast_type::<EcmascriptModulePartAsset>(module).await?
+    {
+        if matches!(
+            *module.await?.part.await?,
+            ModulePart::Internal(..) | ModulePart::Evaluation
+        ) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 async fn handle_declared_export(
