@@ -23,7 +23,6 @@ use turbopack_core::{
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, StyledString},
     module::Module,
     reference::ModuleReference,
-    resolve::ModulePart,
 };
 
 use super::base::ReferencedAsset;
@@ -31,7 +30,6 @@ use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGeneration, CodeGenerationHoistedStmt},
     magic_identifier,
-    tree_shake::asset::EcmascriptModulePartAsset,
 };
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
