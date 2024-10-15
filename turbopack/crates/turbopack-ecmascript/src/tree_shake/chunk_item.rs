@@ -117,10 +117,14 @@ pub(super) struct SideEffectsModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for SideEffectsModuleChunkItem {
     #[turbo_tasks::function]
-    fn references(&self) -> Vc<ModuleReferences> {}
+    fn references(&self) -> Vc<ModuleReferences> {
+        self.module.references()
+    }
 
     #[turbo_tasks::function]
-    fn asset_ident(&self) -> Vc<AssetIdent> {}
+    fn asset_ident(&self) -> Vc<AssetIdent> {
+        self.module.ident()
+    }
 
     #[turbo_tasks::function]
     fn ty(&self) -> Vc<Box<dyn ChunkType>> {
@@ -128,23 +132,23 @@ impl ChunkItem for SideEffectsModuleChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn module(&self) -> Vc<Box<dyn Module>> {}
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.module)
+    }
 
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {}
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        self.chunking_context
+    }
 }
+
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for SideEffectsModuleChunkItem {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<EcmascriptChunkItemContent> {}
 
     #[turbo_tasks::function]
-    async fn content_with_async_module_info(
-        &self,
-        async_module_info: Option<Vc<AsyncModuleInfo>>,
-    ) -> Vc<EcmascriptChunkItemContent> {
+    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        self.chunking_context
     }
-
-    #[turbo_tasks::function]
-    fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {}
 }
