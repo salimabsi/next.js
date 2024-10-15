@@ -159,38 +159,11 @@ impl EcmascriptChunkItem for SideEffectsModuleChunkItem {
 
         code.push_bytes(
             format!(
-                "const mod = __turbopack_import__({});\n",
+                "__turbopack_export_namespace__(__turbopack_import__({}));\n",
                 StringifyJs(&*module.module.ident().to_string().await?)
             )
             .as_bytes(),
         );
-
-        match module.new_name {
-            Some(new_name) => {
-                code.push_bytes(
-                    format!(
-                        "__turbopack_esm__({{
-                    {name}: () => mod[{new_name}],
-                }});\n",
-                        name = StringifyJs(&*module.export_name.await?),
-                        new_name = StringifyJs(&*new_name.await?),
-                    )
-                    .as_bytes(),
-                );
-            }
-
-            None => {
-                code.push_bytes(
-                    format!(
-                        "__turbopack_esm__({{
-                            {name}: () => mod
-                        }});\n",
-                        name = StringifyJs(&*module.export_name.await?),
-                    )
-                    .as_bytes(),
-                );
-            }
-        }
 
         for &side_effect in self.module.await?.side_effects.await?.iter() {
             if !has_top_level_await {
