@@ -128,7 +128,7 @@ pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: RcStr,
     side_effect_free_packages: Vc<Glob>,
-    ignore_side_effect_of_entry: Vc<bool>,
+    ignore_side_effect_of_entry: bool,
 ) -> Result<Vc<FollowExportsResult>> {
     if !*ignore_side_effect_of_entry.await?
         && !*module
