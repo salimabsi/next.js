@@ -1,5 +1,6 @@
 use anyhow::Result;
-use turbo_tasks::{ValueDefault, Vc};
+use turbo_tasks::{ValueDefault, ValueToString, Vc};
+use turbo_tasks_fs::rope::RopeBuilder;
 use turbopack_core::{
     chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
     ident::AssetIdent,
@@ -9,8 +10,12 @@ use turbopack_core::{
 
 use super::{asset::EcmascriptModulePartAsset, part_of_module, split_module};
 use crate::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkType},
+    chunk::{
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemOptions,
+        EcmascriptChunkType,
+    },
     tree_shake::asset::SideEffectsModule,
+    utils::StringifyJs,
     EcmascriptModuleContent,
 };
 
@@ -145,7 +150,33 @@ impl ChunkItem for SideEffectsModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for SideEffectsModuleChunkItem {
     #[turbo_tasks::function]
-    fn content(&self) -> Vc<EcmascriptChunkItemContent> {}
+    async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
+        let mut code = RopeBuilder::default();
+
+        for &side_effect in self.module.await?.side_effects.await?.iter() {
+            code.push_bytes(
+                format!(
+                    "import {};\n",
+                    StringifyJs(&*side_effect.ident().to_string().await?)
+                )
+                .as_bytes(),
+            );
+        }
+
+        let code = code.build();
+
+        Ok(EcmascriptChunkItemContent {
+            inner_code: code,
+            source_map: None,
+            options: EcmascriptChunkItemOptions {
+                strict: true,
+                exports: true,
+                ..Default::default()
+            },
+            placeholder_for_future_extensions: (),
+        }
+        .cell())
+    }
 
     #[turbo_tasks::function]
     fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
