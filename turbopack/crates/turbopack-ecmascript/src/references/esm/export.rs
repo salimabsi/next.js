@@ -15,7 +15,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{trace::TraceRawVcs, vdbg, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, RcStr, TryFlatJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::glob::Glob;
 use turbopack_core::{
     chunk::ChunkingContext,
@@ -144,7 +144,6 @@ pub async fn follow_reexports(
     let mut module = module;
     let mut export_name = export_name;
     loop {
-        vdbg!(&*module.ident().to_string().await?);
         let exports = module.get_exports().await?;
         let EcmascriptExports::EsmExports(exports) = &*exports else {
             return Ok(FollowExportsResult::cell(FollowExportsResult {
@@ -183,7 +182,6 @@ pub async fn follow_reexports(
             let result = get_all_export_names(module).await?;
             if let Some(m) = result.esm_exports.get(&export_name) {
                 module = *m;
-                vdbg!("all_export_names", &*module.ident().to_string().await?);
                 continue;
             }
             return match &result.dynamic_exporting_modules[..] {
