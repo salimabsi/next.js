@@ -12,8 +12,9 @@ use super::{asset::EcmascriptModulePartAsset, part_of_module, split_module};
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemOptions,
-        EcmascriptChunkType,
+        EcmascriptChunkPlaceable, EcmascriptChunkType,
     },
+    references::async_module::AsyncModuleOptions,
     tree_shake::asset::SideEffectsModule,
     utils::StringifyJs,
     EcmascriptModuleContent,
@@ -152,8 +153,18 @@ impl EcmascriptChunkItem for SideEffectsModuleChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
         let mut code = RopeBuilder::default();
+        let mut has_top_level_await = false;
 
         for &side_effect in self.module.await?.side_effects.await?.iter() {
+            if !has_top_level_await {
+                let async_module = *side_effect.get_async_module().await?;
+                if let Some(async_module) = async_module {
+                    if async_module.await?.has_top_level_await {
+                        has_top_level_await = true;
+                    }
+                }
+            }
+
             code.push_bytes(
                 format!(
                     "import {};\n",
@@ -171,6 +182,13 @@ impl EcmascriptChunkItem for SideEffectsModuleChunkItem {
             options: EcmascriptChunkItemOptions {
                 strict: true,
                 exports: true,
+                async_module: if has_top_level_await {
+                    Some(AsyncModuleOptions {
+                        has_top_level_await: true,
+                    })
+                } else {
+                    None
+                },
                 ..Default::default()
             },
             placeholder_for_future_extensions: (),
