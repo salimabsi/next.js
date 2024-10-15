@@ -30,10 +30,10 @@ describe('app dir - dynamic error trace', () => {
       '[data-nextjs-call-stack-frame]'
     )
     const stackFramesContent = // TODO: Why is this text empty?
-    (await Promise.all(stackFrameElements.map((f) => f.innerText())))
-      // Filter out the frames having code snippet but without methodName and source
-      .filter(Boolean)
-      .join('\n')
+      (await Promise.all(stackFrameElements.map((f) => f.innerText())))
+        // Filter out the frames having code snippet but without methodName and source
+        .filter(Boolean)
+        .join('\n')
 
     // TODO: Show useful stack
     expect(normalizeStackTrace(stackFramesContent)).toMatchInlineSnapshot(
